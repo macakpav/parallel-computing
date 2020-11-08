@@ -1,0 +1,16 @@
+Q1:
+	1 - all loops apart from first one
+	2 - 100.310001 seconds
+
+Q2:
+	1 - ?? How did we get this latency? I thought that each core needs 7 channels if it has to DIRECTLY communicate with every other core between T1 and T2 (so 4*6ms + 2*4ms + 2ms)
+
+
+Q4:
+	2 - ?? What are bisection bandwidths?
+	4 - ?? What is meant by prone to failure?
+
+Q5:
+	Grid communication time - I would say it should be 624/16 for 16 processors (no, the grid is 4x4)
+	The time per word in the table is 0.1 not 10 as used in the calculation why?
+	
