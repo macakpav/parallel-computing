@@ -17,20 +17,23 @@ omp6: omp_bug6.c
 	gcc -o omp6.exe omp_bug6.c -fopenmp
 	@ ./omp6.exe
 mpi1: mpi_bug1.c
-	gcc -o mpi1.exe mpi_bug1.c 
-	@ ./mpi1.exe
+	mpicc -o mpi1.exe mpi_bug1.c 
+	@ mpiexec -np 2 ./mpi1.exe
 mpi2: mpi_bug2.c
-	gcc -o mpi2.exe mpi_bug2.c 
-	@ ./mpi2.exe
+	mpicc -o mpi2.exe mpi_bug2.c 
+	@ mpiexec -np 2  ./mpi2.exe
 mpi3: mpi_bug3.c
-	gcc -o mpi3.exe mpi_bug3.c 
-	@ ./mpi3.exe
+	mpicc -o mpi3.exe mpi_bug3.c 
+	@ mpiexec -np 4  ./mpi3.exe
 mpi4: mpi_bug4.c
-	gcc -o mpi4.exe mpi_bug4.c 
-	@ ./mpi4.exe
+	mpicc -o mpi4.exe mpi_bug4.c 
+	@ mpiexec -np 8  ./mpi4.exe
 mpi5: mpi_bug5.c
-	gcc -o mpi5.exe mpi_bug5.c 
-	@ ./mpi5.exe
+	mpicc -o mpi5.exe mpi_bug5.c 
+	@ mpiexec -np 2  ./mpi5.exe
 mpi6: mpi_bug6.c
-	gcc -o mpi6.exe mpi_bug6.c 
-	@ ./mpi6.exe
+	mpicc -o mpi6.exe mpi_bug6.c 
+	@ mpiexec -np 4  ./mpi6.exe
+mpi7: mpi_bug7.c
+	mpicc -o mpi7.exe mpi_bug7.c 
+	@ mpiexec -np 4  ./mpi7.exe

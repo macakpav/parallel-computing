@@ -18,7 +18,7 @@ if (rank == 0) {
     printf("Numtasks=%d. Only 2 needed. Ignoring extra...\n",numtasks);
   dest = rank + 1;
   source = dest;
-  tag = rank;
+  tag = rank + 1;
   rc = MPI_Send(&outmsg, 1, MPI_CHAR, dest, tag, MPI_COMM_WORLD);
   printf("Sent to task %d...\n",dest);
   rc = MPI_Recv(&inmsg, 1, MPI_CHAR, source, tag, MPI_COMM_WORLD, &Stat);
