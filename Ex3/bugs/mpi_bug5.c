@@ -37,6 +37,7 @@ if (rank == 0) {
       printf("Count= %d  Time= %f sec.\n", count, end-start);
       start = MPI_Wtime();
       }
+    MPI_Barrier(MPI_COMM_WORLD); // prevent buffer from filling up
     }
   }
 
@@ -49,6 +50,7 @@ if (rank == 1) {
     result = 0.0;
     for (i=0; i < 1000000; i++) 
       result = result + (double)random();
+    MPI_Barrier(MPI_COMM_WORLD);
     }
   }
 

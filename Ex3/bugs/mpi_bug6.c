@@ -45,7 +45,7 @@ if (rank < 2) {
     }
   if (rank == 1) {
     src = 0;
-    offset = REPS;
+    offset = 0;
     }
   dest = src;
 
@@ -91,7 +91,9 @@ if (rank > 1) {
   }
 
 /* Wait for all non-blocking operations to complete and record time */
+if (rank != 2) { 
 MPI_Waitall(nreqs, reqs, stats);
+}
 T2 = MPI_Wtime();     /* end time */
 MPI_Barrier(COMM);
 
