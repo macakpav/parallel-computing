@@ -7,3 +7,5 @@ all: clean gol
 	@python3 gol_visualization.py ????-??-??-??-??-??.gol
 gol: gol_serial.cpp
 	g++ -o gol.exe -O3 -std=c++1z gol_serial.cpp
+wipe: clean
+	@rm -f *.exe
