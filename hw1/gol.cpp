@@ -6,6 +6,7 @@
  * First implementation: November 2019
  */
 
+#include <mpi.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -13,8 +14,69 @@
 #include <vector>
 #include <ctime>
 #include <cmath>
+#include <tuple>
 
 int const globalBufferLength = 50;
+
+int getPID(const int row, const int col, const int pRows, const int pCols)
+{
+	// Get ID of processor on row row and column col in processor grid (pRows x pCols)
+
+	if (col == pCols)
+		return getPID(row, 0, pRows, pCols);
+	if (col == -1)
+		return getPID(row, pCols - 1, pRows, pCols);
+	if (row == pRows)
+		return getPID(0, col, pRows, pCols);
+	if (row == -1)
+		return getPID(pRows - 1, col, pRows, pCols);
+
+	if (row < 0 || col < 0 || row >= pRows || col >= pCols)
+	{
+		return -1; // means no neighboor
+	}
+	return row * pRows + col;
+}
+
+std::tuple<int, int> getPcoords(const int pID, const int pRows, const int pCols)
+{
+	// Get row and column of processor pID
+	int pRow = 0 + pID / pCols;
+	int pCol = 0 + pID - (pID / pCols) * (pCols);
+	return {pRow, pCol};
+}
+
+std::tuple<int, int> getRowRange(const int pID, const int pRows, const int pCols, const int rowsPerP, const int colsPerP)
+{
+	// Get row range of processor pID
+	auto [pRow, pCol] = getPcoords(pID, pRows, pCols);
+	return getRowRange(pRow, pCol, pRows, pCols, rowsPerP, colsPerP);
+}
+
+std::tuple<int, int> getRowRange(const int pRow, const int pCol, const int pRows, const int pCols, const int rowsPerP, const int colsPerP)
+{
+	// Get row range of processor at coordinates pRow, pCol
+
+	int pFirstRow = pRow * rowsPerP;
+	int pLastRow = pFirstRow + rowsPerP - 1;
+	return {pFirstRow, pLastRow};
+}
+
+std::tuple<int, int> getColRange(const int pID, const int pRows, const int pCols, const int rowsPerP, const int colsPerP)
+{
+	// Get column range of processor pID
+	auto [pRow, pCol] = getPcoords(pID, pRows, pCols);
+	return getRowRange(pRow, pCol, pRows, pCols, rowsPerP, colsPerP);
+}
+
+std::tuple<int, int> getColRange(const int pRow, const int pCol, const int pRows, const int pCols, const int rowsPerP, const int colsPerP)
+{
+	// Get column range of processor at coordinates pRow, pCol
+
+	int pFirstCol = pCol * colsPerP + 1;
+	int pLastCol = pFirstCol + colsPerP - 1;
+	return {pFirstCol, pLastCol};
+}
 
 void initializeBoard(std::vector<std::vector<bool>> &board)
 {
@@ -109,12 +171,12 @@ int main(int argc, char *argv[])
 		std::cout << "This program should be called with four arguments! \nThese should be, the total number of rows; the total number of columns; the gap between saved iterations and the total number of iterations, in that order." << std::endl;
 		return 1;
 	}
-	size_t rows, cols;
+	size_t noRows, noCols;
 	int iteration_gap, iterations;
 	try
 	{
-		rows = atoi(argv[1]);
-		cols = atoi(argv[2]);
+		noRows = atoi(argv[1]);
+		noCols = atoi(argv[2]);
 		iteration_gap = atoi(argv[3]);
 		iterations = atoi(argv[4]);
 	}
@@ -133,37 +195,67 @@ int main(int argc, char *argv[])
 	MPI_Comm_size(MPI_COMM_WORLD, &processes);
 
 	// Get the rank of the process
-	int processID;
-	MPI_Comm_rank(MPI_COMM_WORLD, &processID);
+	int myID;
+	MPI_Comm_rank(MPI_COMM_WORLD, &myID);
 
-	size_t firstRow = 0, lastRow = rows - 1, firstCol = 0, lastCol = cols - 1;
+	size_t firstRow = 0, lastRow = noRows - 1, firstCol = 0, lastCol = noCols - 1;
 	// All threads use the same name
-	std::string programName = setUpProgram(rows, cols, iteration_gap, iterations, processes);
+	std::string programName = setUpProgram(noRows, noCols, iteration_gap, iterations, processes);
 
-	if (processID == 0) {
-	printf ("Game of Life has started...\n");
-	if ((int)std::sqrt(processes)**2 > 0) 
-		printf("INFO: Number of tasks= %d. Only using 2 tasks.\n", numtasks);
+	int usedProcesses = (int)std::sqrt(processes) * (int)std::sqrt(processes);
+	if (myID == 0)
+	{
+		printf("Game of Life has started...\n");
+		if (processes - usedProcesses > 0)
+			;
+		printf("INFO: Number of tasks= %d. Only using %d tasks.\n", processes, usedProcesses);
 	}
+	processes = usedProcesses;
 
-	int procCols;
-	int procRows;
+	//2D-square partitioning
+	int procCols = (int)std::sqrt(processes);
+	int procRows = procCols;
+
+	// assuming noCols and noRows is divisible by procCols and procRows
+	int rowsPerProc = noRows / procRows;
+	int colsPerProc = noCols / procCols;
 
 	//Build board separately for each thread
-	int myFirstRow = pr
-	int myLastRow
-	std::vector<std::vector<bool>> myBoard(  )
-	std::vector<std::vector<bool>> board((lastRow - firstRow + 1), std::vector<bool>(lastCol - firstCol + 1));
-	initializeBoard(board);
+	auto [myRow, myCol] = getPcoords(myID, procRows, procCols);
+	auto [myFirstRow, myLastRow] = getRowRange(myID, procRows, procCols, rowsPerProc, colsPerProc);
+	auto [myFirstCol, myLastCol] = getColRange(myID, procRows, procCols, rowsPerProc, colsPerProc);
+
+	int northNB = getPID(myRow - 1, myCol, procRows, procCols);
+	int southNB = getPID(myRow + 1, myCol, procRows, procCols);
+	int westNB = getPID(myRow, myCol - 1, procRows, procCols);
+	int eastNB = getPID(myRow, myCol + 1, procRows, procCols);
+
+	std::vector<std::vector<bool>> myBoard((myLastRow - myFirstRow + 1 + 2), std::vector<bool>(myLastCol - myFirstCol + 1 + 2));
+	initializeBoard(myBoard);
+
+	if (myCol % 2 == 0)
+	{
+		for (int i = 0; i < rowsPerProc; i++)
+		{
+			MPI_Send(*myBoard[i][myLastCol], 1, MPI_BOOL, eastNB, 1, MPI_COMM_WORLD);
+		}
+	}
+	else
+	{
+		for (int i = 0; i < rowsPerProc; i++)
+		{
+			MPI_Recv(*myBoard[i][0], 1, MPI_BOOL, westNB, 1, MPI_COMM_WORLD);
+		}
+	}
 
 	//Do iteration
-	writeBoardToFile(board, firstRow, lastRow, firstCol, lastCol, programName, 0, processID);
+	writeBoardToFile(myBoard, myFirstRow, myLastRow, myFirstCol, myLastCol, programName, 0, myID);
 	for (int i = 1; i <= iterations; ++i)
 	{
-		updateBoard(board);
+		updateBoard(myBoard);
 		if (i % iteration_gap == 0)
 		{
-			writeBoardToFile(board, firstRow, lastRow, firstCol, lastCol, programName, i, processID);
+			writeBoardToFile(myBoard, myFirstRow, myLastRow, myFirstCol, myLastCol, programName, i, myID);
 		}
 	}
 
