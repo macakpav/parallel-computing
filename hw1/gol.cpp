@@ -50,7 +50,9 @@ std::tuple<int, int> getRowRange(const int pID, const int pRows, const int pCols
 {
 	// Get row range of processor pID
 	auto [pRow, pCol] = getPcoords(pID, pRows, pCols);
-	return getRowRange(pRow, pCol, pRows, pCols, rowsPerP, colsPerP);
+	int pFirstRow = pRow * rowsPerP;
+	int pLastRow = pFirstRow + rowsPerP - 1;
+	return {pFirstRow, pLastRow};
 }
 
 std::tuple<int, int> getRowRange(const int pRow, const int pCol, const int pRows, const int pCols, const int rowsPerP, const int colsPerP)
@@ -66,14 +68,16 @@ std::tuple<int, int> getColRange(const int pID, const int pRows, const int pCols
 {
 	// Get column range of processor pID
 	auto [pRow, pCol] = getPcoords(pID, pRows, pCols);
-	return getRowRange(pRow, pCol, pRows, pCols, rowsPerP, colsPerP);
+	int pFirstCol = pCol * colsPerP;
+	int pLastCol = pFirstCol + colsPerP - 1;
+	return {pFirstCol, pLastCol};
 }
 
 std::tuple<int, int> getColRange(const int pRow, const int pCol, const int pRows, const int pCols, const int rowsPerP, const int colsPerP)
 {
 	// Get column range of processor at coordinates pRow, pCol
 
-	int pFirstCol = pCol * colsPerP + 1;
+	int pFirstCol = pCol * colsPerP;
 	int pLastCol = pFirstCol + colsPerP - 1;
 	return {pFirstCol, pLastCol};
 }
@@ -135,12 +139,20 @@ void writeBoardToFile(std::vector<std::vector<bool>> &board, size_t firstRow, si
 	outputFile << std::to_string(firstRow) << " " << std::to_string(lastRow) << std::endl;
 	outputFile << std::to_string(firstCol) << " " << std::to_string(lastCol) << std::endl;
 	//Write data
-	std::ostream_iterator<bool> outputIterator(outputFile, "\t");
-	for (size_t i = 0; i < board.size(); ++i)
-	{
-		copy(board[i].begin(), board[i].end(), outputIterator);
+	// std::ostream_iterator<bool> outputIterator(outputFile, "\t");
+	for (size_t i = 1; i < board.size()-1; ++i){
+		for (size_t j = 1; j < board[0].size()-1; j++)
+		{
+			outputFile << std::to_string(board[i][j]) << "\t";
+		}
 		outputFile << std::endl;
 	}
+	// for (size_t i = 1; i <= board.size(); ++i)
+	// {
+	// 	copy(++board[i].begin(), --board[i].end(), outputIterator);
+	// 	outputFile << std::endl;
+	// }
+
 	//Close file
 	outputFile.close();
 }
@@ -189,6 +201,7 @@ int main(int argc, char *argv[])
 	// currently used by MPI implementations, but are there in case future
 	// implementations might need the arguments.
 	MPI_Init(NULL, NULL);
+	MPI_Status Stat;
 
 	// Get the number of processes
 	int processes;
@@ -198,7 +211,7 @@ int main(int argc, char *argv[])
 	int myID;
 	MPI_Comm_rank(MPI_COMM_WORLD, &myID);
 
-	size_t firstRow = 0, lastRow = noRows - 1, firstCol = 0, lastCol = noCols - 1;
+	// size_t firstRow = 0, lastRow = noRows - 1, firstCol = 0, lastCol = noCols - 1;
 	// All threads use the same name
 	std::string programName = setUpProgram(noRows, noCols, iteration_gap, iterations, processes);
 
@@ -206,9 +219,7 @@ int main(int argc, char *argv[])
 	if (myID == 0)
 	{
 		printf("Game of Life has started...\n");
-		if (processes - usedProcesses > 0)
-			;
-		printf("INFO: Number of tasks= %d. Only using %d tasks.\n", processes, usedProcesses);
+		printf("INFO: Number of tasks = %d. Only using %d tasks.\n", processes, usedProcesses);
 	}
 	processes = usedProcesses;
 
@@ -229,29 +240,131 @@ int main(int argc, char *argv[])
 	int southNB = getPID(myRow + 1, myCol, procRows, procCols);
 	int westNB = getPID(myRow, myCol - 1, procRows, procCols);
 	int eastNB = getPID(myRow, myCol + 1, procRows, procCols);
+	MPI_Barrier(MPI_COMM_WORLD);
+#ifndef NDEBUG
+	std::cout << "Processor " << myID << " will initialize its board." << std::endl;
+#endif
 
 	std::vector<std::vector<bool>> myBoard((myLastRow - myFirstRow + 1 + 2), std::vector<bool>(myLastCol - myFirstCol + 1 + 2));
 	initializeBoard(myBoard);
-
-	if (myCol % 2 == 0)
-	{
-		for (int i = 0; i < rowsPerProc; i++)
-		{
-			MPI_Send(*myBoard[i][myLastCol], 1, MPI_BOOL, eastNB, 1, MPI_COMM_WORLD);
-		}
-	}
-	else
-	{
-		for (int i = 0; i < rowsPerProc; i++)
-		{
-			MPI_Recv(*myBoard[i][0], 1, MPI_BOOL, westNB, 1, MPI_COMM_WORLD);
-		}
-	}
+#ifndef NDEBUG
+	std::cout << "Processor " << myID << " finished initializing its board." << std::endl;
+#endif
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	//Do iteration
+	bool westExchange[rowsPerProc];
+	bool eastExchange[rowsPerProc];
+	bool northExchange[colsPerProc];
+	bool southExchange[colsPerProc];
+#ifndef NDEBUG
+	std::cout << "Processor " << myID << " will write its board to file." << std::endl;
+#endif
 	writeBoardToFile(myBoard, myFirstRow, myLastRow, myFirstCol, myLastCol, programName, 0, myID);
+#ifndef NDEBUG
+	std::cout << "Processor " << myID << " finished writing to file." << std::endl;
+#endif
 	for (int i = 1; i <= iterations; ++i)
 	{
+#ifndef NDEBUG
+		std::cout << "Processor " << myID << " has board of size " << myBoard.size() << "x" << myBoard[0].size() << std::endl;
+#endif
+		if (myCol % 2 == 0)
+		{
+			for (int i = 0; i < rowsPerProc; i++)
+			{
+				westExchange[i] = myBoard[i][colsPerProc];
+				eastExchange[i] = myBoard[i][1];
+			}
+#ifndef NDEBUG
+			std::cout << "Processor " << myID << " has his exchange data ready." << std::endl;
+#endif
+			MPI_Send(westExchange, rowsPerProc, MPI_CXX_BOOL, westNB, 1, MPI_COMM_WORLD);
+#ifndef NDEBUG
+			std::cout << "Processor " << myID << " send data to processor " << westNB << std::endl;
+#endif
+			MPI_Send(eastExchange, rowsPerProc, MPI_CXX_BOOL, eastNB, 2, MPI_COMM_WORLD);
+#ifndef NDEBUG
+			std::cout << "Processor " << myID << " send data to processor " << eastNB << std::endl;
+#endif
+			MPI_Recv(eastExchange, rowsPerProc, MPI_CXX_BOOL, eastNB, 3, MPI_COMM_WORLD, &Stat);
+			MPI_Recv(westExchange, rowsPerProc, MPI_CXX_BOOL, westNB, 4, MPI_COMM_WORLD, &Stat);
+			for (int i = 0; i < rowsPerProc; i++)
+			{
+				myBoard[i][colsPerProc + 1] = eastExchange[i];
+				myBoard[i][0] = westExchange[i];
+			}
+		}
+		else
+		{
+#ifndef NDEBUG
+			std::cout << "Processor " << myID << " waiting to recieve." << std::endl;
+#endif
+			MPI_Recv(eastExchange, rowsPerProc, MPI_CXX_BOOL, eastNB, 1, MPI_COMM_WORLD, &Stat);
+			MPI_Recv(westExchange, rowsPerProc, MPI_CXX_BOOL, westNB, 2, MPI_COMM_WORLD, &Stat);
+			for (int i = 0; i < rowsPerProc; i++)
+			{
+				myBoard[i][colsPerProc + 1] = eastExchange[i];
+				myBoard[i][0] = westExchange[i];
+
+				eastExchange[i] = myBoard[i][colsPerProc];
+				westExchange[i] = myBoard[i][1];
+			}
+			MPI_Send(westExchange, rowsPerProc, MPI_CXX_BOOL, westNB, 3, MPI_COMM_WORLD);
+#ifndef NDEBUG
+			std::cout << "Processor " << myID << " send data to processor " << westNB << std::endl;
+#endif
+			MPI_Send(eastExchange, rowsPerProc, MPI_CXX_BOOL, eastNB, 4, MPI_COMM_WORLD);
+#ifndef NDEBUG
+			std::cout << "Processor " << myID << " send data to processor " << eastNB << std::endl;
+#endif
+		}
+
+		if (myRow % 2 == 0)
+		{
+			for (int i = 0; i < colsPerProc; i++)
+			{
+				northExchange[i] = myBoard[1][i];
+				southExchange[i] = myBoard[rowsPerProc][i];
+			}
+			MPI_Send(northExchange, colsPerProc, MPI_CXX_BOOL, northNB, 5, MPI_COMM_WORLD);
+#ifndef NDEBUG
+			std::cout << "Processor " << myID << " send data to processor " << northNB << std::endl;
+#endif
+			MPI_Send(southExchange, colsPerProc, MPI_CXX_BOOL, southNB, 6, MPI_COMM_WORLD);
+#ifndef NDEBUG
+			std::cout << "Processor " << myID << " send data to processor " << southNB << std::endl;
+#endif
+			MPI_Recv(southExchange, colsPerProc, MPI_CXX_BOOL, southNB, 7, MPI_COMM_WORLD, &Stat);
+			MPI_Recv(northExchange, colsPerProc, MPI_CXX_BOOL, northNB, 8, MPI_COMM_WORLD, &Stat);
+			for (int i = 0; i < colsPerProc; i++)
+			{
+				myBoard[rowsPerProc + 1][i] = southExchange[i];
+				myBoard[0][i] = northExchange[i];
+			}
+		}
+		else
+		{
+			MPI_Recv(southExchange, colsPerProc, MPI_CXX_BOOL, southNB, 5, MPI_COMM_WORLD, &Stat);
+			MPI_Recv(northExchange, colsPerProc, MPI_CXX_BOOL, northNB, 6, MPI_COMM_WORLD, &Stat);
+			for (int i = 0; i < colsPerProc; i++)
+			{
+				myBoard[rowsPerProc + 1][i] = southExchange[i];
+				myBoard[0][i] = northExchange[i];
+
+				northExchange[i] = myBoard[1][i];
+				southExchange[i] = myBoard[rowsPerProc][i];
+			}
+			MPI_Send(northExchange, colsPerProc, MPI_CXX_BOOL, northNB, 7, MPI_COMM_WORLD);
+#ifndef NDEBUG
+			std::cout << "Processor " << myID << " send data to processor " << northNB << std::endl;
+#endif
+			MPI_Send(southExchange, colsPerProc, MPI_CXX_BOOL, southNB, 8, MPI_COMM_WORLD);
+#ifndef NDEBUG
+			std::cout << "Processor " << myID << " send data to processor " << southNB << std::endl;
+#endif
+		}
+
 		updateBoard(myBoard);
 		if (i % iteration_gap == 0)
 		{
