@@ -53,7 +53,7 @@ double innerProduct(ublas::matrix_column<ublas::matrix<double, ublas::column_maj
     assert(v.size() == w.size());
 
     double result = 0.0;
-    // #pragma omp for schedule(static)
+    // #pragma omp for schedule(static) reduction(+: result)
     for (size_t i = 0; i < v.size(); ++i)
     {
         result += v(i) * w(i);
@@ -68,14 +68,14 @@ void GramSchmidt(ublas::matrix<double, ublas::column_major> &Q, ublas::vector<do
     assert(Q.size2() == R_diag.size());
     size_t subspaceSize = R_diag.size();
 
+// #pragma omp parallel shared(Q, R_diag) //for older omp versions
     for (size_t i = 0; i < subspaceSize; ++i)
     {
         ublas::matrix_column<ublas::matrix<double, ublas::column_major>> Q_i(Q, i);
         R_diag(i) = sqrt(innerProduct(Q_i, Q_i));
         Q_i /= R_diag(i);
-// #pragma omp parallel shared(Q_i, Q)
         {
-// #pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic) shared(Q_i, Q, i)
             for (size_t j = i + 1; j < subspaceSize; ++j)
             {
                 ublas::matrix_column<ublas::matrix<double, ublas::column_major>> Q_j(Q, j);

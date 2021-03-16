@@ -1,8 +1,8 @@
-args=10000 10 25 # serial / parallel / incl vector product average code time
-#10000 10 25 -> 	~34s  /	5492ms	 / 5492ms
-#200 200 25 -> 		~600ms/	440ms	 / 
-#1000 10 25 -> 		~367ms/	79ms  	 / 92ms
-#1000 20 50 ->		1477ms/ 320ms	 / 310ms
+args=10000 10 25 # serial / parallel / incl graham parallel / static scheduling average code time
+#10000 10 25 -> 	~34s  /	5492ms	 / 5347ms/ 5378ms
+#200 200 25 -> 		614ms /	478ms	 / 226ms / 202ms
+#1000 10 25 -> 		370ms /	78ms  	 / 87ms  / 91ms
+#1000 20 50 ->		1477ms/ 348ms	 / 294ms / 342ms
 
 default: eigenvalues.exe
 parallel: eigenvalues_parallel.exe
